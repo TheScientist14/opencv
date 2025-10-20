@@ -87,7 +87,7 @@ class ThreadPool
 public:
     static ThreadPool& instance()
     {
-        CV_SINGLETON_LAZY_INIT_REF(ThreadPool, new ThreadPool())
+        CV_SINGLETON_LAZY_INIT_REF(ThreadPool)
     }
 
     static void stop()

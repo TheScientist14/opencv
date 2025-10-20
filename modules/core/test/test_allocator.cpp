@@ -91,8 +91,8 @@ int  DummyAllocator::deallocations = 0;
 
 cv::MatAllocator* getDummyAllocator()
 {
-    static cv::MatAllocator* allocator = new DummyAllocator;
-    return allocator;
+    static std::unique_ptr<DummyAllocator> allocator(new DummyAllocator);
+    return static_cast<cv::MatAllocator*>(allocator.get());
 }
 
 struct AllocatorTest : public testing::Test {

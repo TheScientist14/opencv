@@ -514,7 +514,7 @@ struct OpenCLBinaryCacheConfigurator
 
     static OpenCLBinaryCacheConfigurator& getSingletonInstance()
     {
-        CV_SINGLETON_LAZY_INIT_REF(OpenCLBinaryCacheConfigurator, new OpenCLBinaryCacheConfigurator());
+        CV_SINGLETON_LAZY_INIT_REF(OpenCLBinaryCacheConfigurator);
     }
 };
 class BinaryProgramFile
@@ -1257,7 +1257,7 @@ class AmdBlasHelper
 public:
     static AmdBlasHelper & getInstance()
     {
-        CV_SINGLETON_LAZY_INIT_REF(AmdBlasHelper, new AmdBlasHelper())
+        CV_SINGLETON_LAZY_INIT_REF(AmdBlasHelper)
     }
 
     bool isAvailable() const
@@ -1333,7 +1333,7 @@ class AmdFftHelper
 public:
     static AmdFftHelper & getInstance()
     {
-        CV_SINGLETON_LAZY_INIT_REF(AmdFftHelper, new AmdFftHelper())
+        CV_SINGLETON_LAZY_INIT_REF(AmdFftHelper)
     }
 
     bool isAvailable() const
@@ -2368,14 +2368,10 @@ struct Context::Impl
     static Context::Impl* get(Context& context) { return context.p; }
 
     typedef std::deque<Context::Impl*> container_t;
-    static container_t& getGlobalContainer()
-    {
-        // never delete this container (Impl lifetime is greater due to TLS storage)
-        static container_t* g_contexts = new container_t();
-        return *g_contexts;
-    }
 
 protected:
+    static container_t g_contexts;
+
     Impl(const std::string& configuration_)
         : refcount(1)
         , contextId(CV_XADD(&g_contextId, 1))
@@ -2389,9 +2385,8 @@ protected:
             CV_Error(cv::Error::OpenCLApiCallError, "OpenCL runtime is not available!");
 
         cv::AutoLock lock(cv::getInitializationMutex());
-        auto& container = getGlobalContainer();
-        container.resize(std::max(container.size(), (size_t)contextId + 1));
-        container[contextId] = this;
+        g_contexts.resize(std::max(g_contexts.size(), (size_t)contextId + 1));
+        g_contexts[contextId] = this;
     }
 
     ~Impl()
@@ -2412,9 +2407,8 @@ protected:
 
         {
             cv::AutoLock lock(cv::getInitializationMutex());
-            auto& container = getGlobalContainer();
-            CV_CheckLT((size_t)contextId, container.size(), "");
-            container[contextId] = NULL;
+            CV_CheckLT((size_t)contextId, g_contexts.size(), "");
+            g_contexts[contextId] = NULL;
         }
     }
 
@@ -2455,10 +2449,9 @@ public:
     {
         CV_TRACE_FUNCTION();
         cv::AutoLock lock(cv::getInitializationMutex());
-        auto& container = getGlobalContainer();
-        if (configuration.empty() && !container.empty())
-            return container[0];
-        for (auto it = container.begin(); it != container.end(); ++it)
+        if (configuration.empty() && !g_contexts.empty())
+            return g_contexts[0];
+        for (auto it = g_contexts.begin(); it != g_contexts.end(); ++it)
         {
             Impl* i = *it;
             if (i && i->configuration == configuration)
@@ -2879,6 +2872,7 @@ public:
     friend class Program;
 };
 
+Context::Impl::container_t Context::Impl::g_contexts{};
 
 Context::Context() CV_NOEXCEPT
 {
@@ -6630,14 +6624,9 @@ public:
     }
 };
 
-static OpenCLAllocator* getOpenCLAllocator_() // call once guarantee
-{
-    static OpenCLAllocator* g_allocator = new OpenCLAllocator(); // avoid destructor call (using of this object is too wide)
-    return g_allocator;
-}
 MatAllocator* getOpenCLAllocator()
 {
-    CV_SINGLETON_LAZY_INIT(MatAllocator, getOpenCLAllocator_())
+    CV_SINGLETON_LAZY_INIT_SUBTYPE(MatAllocator, OpenCLAllocator)
 }
 
 }} // namespace cv::ocl

@@ -208,7 +208,7 @@ struct UMatDataAutoLocker
 };
 static TLSData<UMatDataAutoLocker>& getUMatDataAutoLockerTLS()
 {
-    CV_SINGLETON_LAZY_INIT_REF(TLSData<UMatDataAutoLocker>, new TLSData<UMatDataAutoLocker>());
+    CV_SINGLETON_LAZY_INIT_REF(TLSData<UMatDataAutoLocker>);
 }
 static UMatDataAutoLocker& getUMatDataAutoLocker() { return getUMatDataAutoLockerTLS().getRef(); }
 

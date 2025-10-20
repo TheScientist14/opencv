@@ -197,7 +197,7 @@ public:
 
 static MatOp_Initializer* getGlobalMatOpInitializer()
 {
-    CV_SINGLETON_LAZY_INIT(MatOp_Initializer, new MatOp_Initializer())
+    CV_SINGLETON_LAZY_INIT(MatOp_Initializer)
 }
 
 static inline bool isIdentity(const MatExpr& e) { return e.op == &g_MatOp_Identity; }

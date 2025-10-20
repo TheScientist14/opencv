@@ -1503,14 +1503,7 @@ class TlsAbstraction
 {
 public:
     TlsAbstraction();
-    ~TlsAbstraction()
-    {
-        // TlsAbstraction singleton should not be released
-        // There is no reliable way to avoid problems caused by static initialization order fiasco
-        // NB: Do NOT use logging here
-        fprintf(stderr, "OpenCV FATAL: TlsAbstraction::~TlsAbstraction() call is not expected\n");
-        fflush(stderr);
-    }
+    ~TlsAbstraction();
 
     void* getData() const;
     void setData(void *pData);
@@ -1530,26 +1523,9 @@ private:
 #endif
 };
 
-class TlsAbstractionReleaseGuard
+static TlsAbstraction& getTlsAbstraction()
 {
-    TlsAbstraction& tls_;
-public:
-    TlsAbstractionReleaseGuard(TlsAbstraction& tls) : tls_(tls)
-    {
-        /* nothing */
-    }
-    ~TlsAbstractionReleaseGuard()
-    {
-        tls_.releaseSystemResources();
-    }
-};
-
-// TODO use reference
-static TlsAbstraction* getTlsAbstraction()
-{
-    static TlsAbstraction *g_tls = new TlsAbstraction();  // memory leak is intended here to avoid disposing of TLS container
-    static TlsAbstractionReleaseGuard g_tlsReleaseGuard(*g_tls);
-    return g_tls;
+    CV_SINGLETON_LAZY_INIT_REF(TlsAbstraction)
 }
 
 
@@ -1647,6 +1623,11 @@ void TlsAbstraction::setData(void *pData)
 }
 #endif
 
+TlsAbstraction::~TlsAbstraction()
+{
+    releaseSystemResources();
+}
+
 // Per-thread data structure
 struct ThreadData
 {
@@ -1670,26 +1651,21 @@ public:
     TlsStorage() :
         tlsSlotsSize(0)
     {
-        (void)getTlsAbstraction();  // ensure singeton initialization (for correct order of atexit calls)
+        getTlsAbstraction();  // ensure singleton initialization (for correct order of atexit calls)
         tlsSlots.reserve(32);
         threads.reserve(32);
         g_isTlsStorageInitialized = true;
     }
     ~TlsStorage()
     {
-        // TlsStorage object should not be released
-        // There is no reliable way to avoid problems caused by static initialization order fiasco
-        // Don't use logging here
-        fprintf(stderr, "OpenCV FATAL: TlsStorage::~TlsStorage() call is not expected\n");
-        fflush(stderr);
+        for(size_t threadIdx = 0; threadIdx < threads.size(); threadIdx++)
+            releaseThread(threads[threadIdx]);
     }
 
     void releaseThread(void* tlsValue = NULL)
     {
-        TlsAbstraction* tls = getTlsAbstraction();
-        if (NULL == tls)
-            return;  // TLS singleton is not available (terminated)
-        ThreadData *pTD = tlsValue == NULL ? (ThreadData*)tls->getData() : (ThreadData*)tlsValue;
+        TlsAbstraction& tls = getTlsAbstraction();
+        ThreadData *pTD = tlsValue == NULL ? (ThreadData*)tls.getData() : (ThreadData*)tlsValue;
         if (pTD == NULL)
             return;  // no OpenCV TLS data for this thread
         AutoLock guard(mtxGlobalAccess);
@@ -1699,7 +1675,7 @@ public:
             {
                 threads[i] = NULL;
                 if (tlsValue == NULL)
-                    tls->setData(0);
+                    tls.setData(0);
                 std::vector<void*>& thread_slots = pTD->slots;
                 for (size_t slotIdx = 0; slotIdx < thread_slots.size(); slotIdx++)
                 {
@@ -1712,6 +1688,7 @@ public:
                         container->deleteDataInstance(pData);
                     else
                     {
+                        // Don't use logging here since it is called in ~TlsStorage
                         fprintf(stderr, "OpenCV ERROR: TLS: container for slotIdx=%d is NULL. Can't release thread data\n", (int)slotIdx);
                         fflush(stderr);
                     }
@@ -1720,6 +1697,7 @@ public:
                 return;
             }
         }
+        // Don't use logging here since it is called in ~TlsStorage
         fprintf(stderr, "OpenCV WARNING: TLS: Can't release thread TLS data (unknown pointer or data race): %p\n", (void*)pTD); fflush(stderr);
     }
 
@@ -1777,11 +1755,9 @@ public:
         CV_Assert(tlsSlotsSize > slotIdx);
 #endif
 
-        TlsAbstraction* tls = getTlsAbstraction();
-        if (NULL == tls)
-            return NULL;  // TLS singleton is not available (terminated)
+        TlsAbstraction& tls = getTlsAbstraction();
 
-        ThreadData* threadData = (ThreadData*)tls->getData();
+        ThreadData* threadData = (ThreadData*)tls.getData();
         if(threadData && threadData->slots.size() > slotIdx)
             return threadData->slots[slotIdx];
 
@@ -1813,15 +1789,13 @@ public:
         CV_Assert(tlsSlotsSize > slotIdx);
 #endif
 
-        TlsAbstraction* tls = getTlsAbstraction();
-        if (NULL == tls)
-            return;  // TLS singleton is not available (terminated)
+        TlsAbstraction& tls = getTlsAbstraction();
 
-        ThreadData* threadData = (ThreadData*)tls->getData();
+        ThreadData* threadData = (ThreadData*)tls.getData();
         if(!threadData)
         {
             threadData = new ThreadData;
-            tls->setData((void*)threadData);
+            tls.setData((void*)threadData);
             {
                 AutoLock guard(mtxGlobalAccess);
 
@@ -1872,7 +1846,7 @@ private:
 // Create global TLS storage object
 static TlsStorage &getTlsStorage()
 {
-    CV_SINGLETON_LAZY_INIT_REF(TlsStorage, new TlsStorage())
+    CV_SINGLETON_LAZY_INIT_REF(TlsStorage)
 }
 
 #ifndef _WIN32  // pthread key destructor
@@ -2095,7 +2069,7 @@ void* TLSDataContainer::getData() const
 
 static TLSData<CoreTLSData>& getCoreTlsDataTLS()
 {
-    CV_SINGLETON_LAZY_INIT_REF(TLSData<CoreTLSData>, new TLSData<CoreTLSData>())
+    CV_SINGLETON_LAZY_INIT_REF(TLSData<CoreTLSData>)
 }
 
 CoreTLSData& getCoreTlsData()
@@ -2158,7 +2132,7 @@ public:
 
 static TLSData<ThreadID>& getThreadIDTLS()
 {
-    CV_SINGLETON_LAZY_INIT_REF(TLSData<ThreadID>, new TLSData<ThreadID>());
+    CV_SINGLETON_LAZY_INIT_REF(TLSData<ThreadID>);
 }
 
 } // namespace
@@ -2293,7 +2267,7 @@ utils::Paths utils::getConfigurationParameterPaths(const char* name, const utils
 #ifdef CV_COLLECT_IMPL_DATA
 ImplCollector& getImplData()
 {
-    CV_SINGLETON_LAZY_INIT_REF(ImplCollector, new ImplCollector())
+    CV_SINGLETON_LAZY_INIT_REF(ImplCollector)
 }
 
 void setImpl(int flags)
@@ -2694,7 +2668,7 @@ public:
 
 static IPPInitSingleton& getIPPSingleton()
 {
-    CV_SINGLETON_LAZY_INIT_REF(IPPInitSingleton, new IPPInitSingleton())
+    CV_SINGLETON_LAZY_INIT_REF(IPPInitSingleton)
 }
 #endif
 

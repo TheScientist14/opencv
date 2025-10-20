@@ -68,7 +68,7 @@ void infEngineBlobsToMats(const ov::TensorVector& blobs,
 static bool init_IE_plugins()
 {
     // load and hold IE plugins
-    static ov::Core* init_core = new ov::Core();  // 'delete' is never called
+    static std::unique_ptr<ov::Core> init_core = std::make_unique<ov::Core>();
     (void)init_core->get_available_devices();
     return true;
 }

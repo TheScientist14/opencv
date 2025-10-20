@@ -396,12 +396,14 @@ cv::Mutex& getInitializationMutex();
 int64 getTimestampNS();
 
 
-#define CV_SINGLETON_LAZY_INIT_(TYPE, INITIALIZER, RET_VALUE) \
-    static TYPE* const instance = INITIALIZER; \
+#define CV_SINGLETON_LAZY_INIT_(TYPE, RET_VALUE) \
+    static std::unique_ptr<TYPE> const instance = std::unique_ptr<TYPE>(new TYPE()); \
     return RET_VALUE;
 
-#define CV_SINGLETON_LAZY_INIT(TYPE, INITIALIZER) CV_SINGLETON_LAZY_INIT_(TYPE, INITIALIZER, instance)
-#define CV_SINGLETON_LAZY_INIT_REF(TYPE, INITIALIZER) CV_SINGLETON_LAZY_INIT_(TYPE, INITIALIZER, *instance)
+#define CV_SINGLETON_LAZY_INIT(TYPE) CV_SINGLETON_LAZY_INIT_(TYPE, instance.get())
+#define CV_SINGLETON_LAZY_INIT_SUBTYPE(TYPE, SUBTYPE) CV_SINGLETON_LAZY_INIT_(SUBTYPE, static_cast<TYPE*>(instance.get()))
+#define CV_SINGLETON_LAZY_INIT_REF(TYPE) CV_SINGLETON_LAZY_INIT_(TYPE, *instance)
+#define CV_SINGLETON_LAZY_INIT_REF_SUBTYPE(TYPE, SUBTYPE) CV_SINGLETON_LAZY_INIT_(SUBTYPE, static_cast<TYPE&>(instance.get()))
 
 CV_EXPORTS void releaseTlsStorageThread();
 

@@ -196,12 +196,9 @@ void fastFree(void* ptr)
 
 #ifdef OPENCV_ALLOC_ENABLE_STATISTICS
 
-static
-Mutex& getAllocationStatisticsMutex()
+static Mutex& getAllocationStatisticsMutex()
 {
-    static Mutex* p_alloc_mutex = allocSingletonNew<Mutex>();
-    CV_Assert(p_alloc_mutex);
-    return *p_alloc_mutex;
+    CV_SINGLETON_LAZY_INIT_REF(Mutex)
 }
 
 static std::map<void*, size_t> allocated_buffers;  // guarded by getAllocationStatisticsMutex()

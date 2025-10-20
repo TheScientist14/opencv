@@ -911,15 +911,9 @@ bool TraceManager::isActivated()
     return activated;
 }
 
-
-static TraceManager* getTraceManagerCallOnce()
-{
-    static TraceManager globalInstance;
-    return &globalInstance;
-}
 TraceManager& getTraceManager()
 {
-    CV_SINGLETON_LAZY_INIT_REF(TraceManager, getTraceManagerCallOnce())
+    CV_SINGLETON_LAZY_INIT_REF(TraceManager)
 }
 
 void parallelForSetRootRegion(const Region& rootRegion, const TraceManagerThreadLocal& root_ctx)
